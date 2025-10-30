@@ -15,7 +15,20 @@ import {
   User,
   Zap
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+const API_BASE = 'https://ml-heart-disease-predictor-be.onrender.com';
+
+const fetchWithTimeout = async (url, options = {}, timeoutMs = 15000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(id);
+  }
+};
 
 const App = () => {
   const [formData, setFormData] = useState({
@@ -43,6 +56,12 @@ const App = () => {
       [name]: value
     }));
   };
+
+  useEffect(() => {
+    // Warm up backend (avoids cold-start delay on free hosting)
+    fetchWithTimeout(`${API_BASE}/health`, { cache: 'no-store', keepalive: true }, 8000)
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
@@ -72,17 +91,21 @@ const App = () => {
         Oldpeak: parseFloat(formData.Oldpeak)
       };
 
-      const response = await fetch('https://ml-heart-disease-predictor-be.onrender.com/predict', {
+      const response = await fetchWithTimeout(`${API_BASE}/predict`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(processedData),
-      });
+      }, 15000);
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Network response was not ok');
+        let message = 'Request failed';
+        try {
+          const errorData = await response.json();
+          message = errorData.error || message;
+        } catch {}
+        throw new Error(message);
       }
       
       const data = await response.json();

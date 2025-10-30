@@ -32,6 +32,12 @@ def load_models():
     except FileNotFoundError as e:
         logger.error(f"Model files not found: {e}")
         raise
+
+# Load models at import time to avoid cold-start delays in production servers
+try:
+    load_models()
+except Exception as e:
+    logger.error(f"Startup model load failed: {e}")
     except Exception as e:
         logger.error(f"Error loading models: {e}")
         raise
